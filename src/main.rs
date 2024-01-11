@@ -1,9 +1,14 @@
 use actix_web::{middleware, App, HttpServer};
+use std::env;
 use url_shortener::routes;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+    let port_str = env::var("SERVER_PORT").unwrap_or_else(|_| "8080".to_string());
+    let port: u16 = port_str
+        .parse::<u16>()
+        .expect("SERVER_PORT must be a number");
     log::info!("starting HTTP server at :8080");
     HttpServer::new(|| {
         App::new()
@@ -15,7 +20,7 @@ async fn main() -> std::io::Result<()> {
                 actix_web::middleware::TrailingSlash::Trim,
             ))
     })
-    .bind(("0.0.0.0", 8080))?
+    .bind(("0.0.0.0", port))?
     .run()
     .await
 }

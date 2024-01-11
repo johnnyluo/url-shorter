@@ -11,3 +11,4 @@ actix-web-httpauth = "0.6"
 env_logger = "0.10.1"
 log = "0.4.20"
 serde = {version = "1.0.195", features = ["derive"]}
+mysql = "20.0.0"

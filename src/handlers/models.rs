@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct Payload {
     pub user_id: String,
     pub target: String,
+    pub expires_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
