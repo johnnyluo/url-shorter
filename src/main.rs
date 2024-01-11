@@ -10,6 +10,10 @@ async fn main() -> std::io::Result<()> {
             // enable logger
             .configure(routes::configure)
             .wrap(middleware::Logger::default())
+            .wrap(middleware::Compress::default())
+            .wrap(middleware::NormalizePath::new(
+                actix_web::middleware::TrailingSlash::Trim,
+            ))
     })
     .bind(("0.0.0.0", 8080))?
     .run()
