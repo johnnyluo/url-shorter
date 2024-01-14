@@ -1,6 +1,6 @@
 use actix_web::{middleware, App, HttpServer};
 use std::env;
-use url_shortener::routes;
+use url_shortener::{routes, storage::Storage};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -10,10 +10,13 @@ async fn main() -> std::io::Result<()> {
         .parse::<u16>()
         .expect("SERVER_PORT must be a number");
     log::info!("starting HTTP server at :8080");
-    HttpServer::new(|| {
+    // connect to database
+    let db = Storage::new();
+    HttpServer::new(move || {
         App::new()
             // enable logger
             .configure(routes::configure)
+            .app_data(db.clone())
             .wrap(middleware::Logger::default())
             .wrap(middleware::Compress::default())
             .wrap(middleware::NormalizePath::new(
