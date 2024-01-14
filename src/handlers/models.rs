@@ -3,9 +3,12 @@ use actix_web::error::ErrorInternalServerError;
 use actix_web::{error::ErrorUnauthorized, http::header, web, Error, HttpResponse, Responder};
 use actix_web::{HttpMessage, HttpRequest};
 use md5;
+use mysql::chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use sha2::{Digest, Sha256};
+
+use crate::cache::Redis;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Payload {
@@ -80,8 +83,27 @@ pub async fn create(payload: web::Json<Payload>, req: HttpRequest) -> impl Respo
     HttpResponse::InternalServerError().finish()
 }
 
-pub async fn get(id: web::Path<String>,req: HttpRequest) -> impl Responder {
+pub async fn get(id: web::Path<String>, req: HttpRequest) -> impl Responder {
     log::debug!("url id: {}", id);
+    let mut redis_cache: Option<&Redis> = None;
+    if let Some(redis) = req.app_data::<crate::cache::Redis>() {
+        redis_cache = Some(redis);
+        let url_meta_result = redis.get_key(&id);
+        if url_meta_result.is_ok() {
+            let url_meta = url_meta_result.unwrap();
+            if !url_meta.target_url.is_empty() {
+                log::debug!("cached url in redis: {:?}", url_meta);
+                return HttpResponse::TemporaryRedirect()
+                    .append_header((header::LOCATION, url_meta.target_url))
+                    .finish();
+            }
+            // when url_meta.target_url is empty, it means the url is not found in redis
+        } else {
+            log::error!("fail to get url, error: {}", url_meta_result.unwrap_err());
+        }
+    } else {
+        log::error!("no cache instance found, continue to check long term storage");
+    }
     if let Some(db) = req.app_data::<crate::storage::Storage>() {
         let url = db.get_url_by_shorten_id(&id.trim().to_string());
         if url.is_err() {
@@ -89,7 +111,18 @@ pub async fn get(id: web::Path<String>,req: HttpRequest) -> impl Responder {
             return HttpResponse::InternalServerError().finish();
         }
         if let Some(url) = url.unwrap() {
-            log::debug!("url: {}", url);
+            log::debug!("url in database: {}", url);
+            if let Some(redis) = redis_cache {
+                let url_meta = crate::models::UrlMeta {
+                    id: 0,
+                    user_id: 0,
+                    shortened_id: id.clone(),
+                    target_url: url.clone(),
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                };
+                let _ = redis.set_key(&id, &url_meta);
+            }
             return HttpResponse::TemporaryRedirect()
                 .append_header((header::LOCATION, url))
                 .finish();
